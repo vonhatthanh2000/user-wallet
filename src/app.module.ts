@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WalletModule } from './wallet/wallet.module';
+import { TransactionModule } from './transaction/transaction.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { WalletModule } from './wallet/wallet.module';
       autoLoadEntities: true,
       synchronize: true,
     }),
+    TransactionModule,
   ],
   controllers: [],
   providers: [],

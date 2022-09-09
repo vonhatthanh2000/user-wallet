@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package wallet;
+
+service WalletService {
+  rpc FindOne (WalletById) returns (Walet) {}
+}
+
+message WalletById {
+  int32 id = 1;
+}
+
+message Walet {
+  int32 id = 1;
+  string name = 2;
+}

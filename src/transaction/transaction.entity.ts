@@ -1,11 +1,11 @@
 import BaseTable from 'src/common/typeorm/base-table';
-import { Column, Entity } from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { Min } from 'class-validator';
-import { ECurrency, ETransactionStatus } from 'src/protobuf/interface-ts/enums';
+import { ECurrency, ETransactionStatus, WalletTypeTransaction } from 'src/protobuf/interface-ts/enums';
 
 @Entity()
 export class Transaction extends BaseTable {
-  @Column('uuid')
+  @Column('uuid', { nullable: true })
   origin!: string;
 
   @Column('uuid')
@@ -18,8 +18,11 @@ export class Transaction extends BaseTable {
   @Column('integer')
   amount: number;
 
-  @Column('varchar')
+  @Column('varchar', { nullable: true })
   details: string;
+
+  @Column('varchar')
+  type: WalletTypeTransaction;
 
   @Column('varchar')
   status: ETransactionStatus;

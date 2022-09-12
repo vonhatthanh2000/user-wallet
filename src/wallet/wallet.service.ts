@@ -1,15 +1,17 @@
 import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { v4 as uuidv4 } from 'uuid';
-import { ECurrency } from 'src/protobuf/interface-ts/enums';
+import { ECurrency, ETransactionStatus, WalletTypeTransaction } from 'src/protobuf/interface-ts/enums';
 import { Repository } from 'typeorm';
 import { Wallet } from './wallet.entity';
+import { TransactionService } from 'src/transaction/transaction.service';
+import { Transaction } from 'src/transaction/transaction.entity';
 
 @Injectable()
 export class WalletService {
   constructor(
-    @InjectRepository(Wallet)
-    private readonly walletRepository: Repository<Wallet>,
+    @InjectRepository(Wallet) private readonly walletRepository: Repository<Wallet>,
+    private readonly transactionService: TransactionService, //
   ) {}
 
   async createWallet(userId: string, currency: ECurrency): Promise<Wallet> {
@@ -22,39 +24,70 @@ export class WalletService {
     return wallet;
   }
 
-  async depositWallet(walletId: string, amount: number): Promise<Wallet> {
-    const currentBalance = await this.getBalance(walletId);
-    const endBalance = currentBalance + amount;
+  async depositWallet(walletId: string, amount: number, currency: ECurrency, details: string = null): Promise<Wallet> {
+    const newTransaction = {
+      id: uuidv4(),
+      origin: null,
+      destination: walletId,
+      currency: currency,
+      amount: amount,
+      details: details,
+      type: WalletTypeTransaction.DEPOSIT,
+      status: ETransactionStatus.PROCESSING,
+    };
 
-    return await this.findAndUpdateWallet(walletId, { balance: endBalance });
+    await this.transactionService.createTransaction(newTransaction as Transaction);
+    const currentBalance = await this.getBalance(walletId);
+    const newBalance = currentBalance + amount;
+
+    return await this.findAndUpdateWallet(walletId, { balance: newBalance });
   }
 
-  async transferWalletFund(walletId: string, destinateId: string, amount: number) {
-    const originWallet = await this.findWallet(walletId);
-    if (!originWallet) throw new NotFoundException('wallet does not exist');
-    const destinateWallet = await this.findWallet(destinateId);
-    if (!destinateWallet) throw new NotFoundException('wallet does not exist');
+  async transferWalletFund(walletId: string, toId: string, amount: number, currency: ECurrency, details: string) {
+    const fromWallet = await this.findWallet(walletId);
+    if (!fromWallet) throw new NotFoundException('wallet does not exist');
+    const toWallet = await this.findWallet(toId);
+    if (!toWallet) throw new NotFoundException('wallet does not exist');
 
-    const originBalance = await this.getBalance(walletId);
-    if (amount > originBalance) throw new BadRequestException('balance of wallet is inadequate to transfer');
+    const fromBalance = await this.getBalance(walletId);
+    if (amount > fromBalance) throw new BadRequestException('balance of wallet is inadequate to transfer');
 
-    const destinateBalance = await this.getBalance(destinateId);
+    const toBalance = await this.getBalance(toId);
 
-    const endOriginBalance = originBalance - amount;
-    const endDesBalance = destinateBalance + amount;
+    const newFromBalance = fromBalance - amount;
+    const newToBalance = toBalance + amount;
 
-    await this.findAndUpdateWallet(walletId, { balance: endOriginBalance });
-    await this.findAndUpdateWallet(destinateId, { balance: endDesBalance });
+    const newTransaction = {
+      id: uuidv4(),
+      origin: fromWallet.id,
+      destination: toWallet.id,
+      currency: currency,
+      amount: amount,
+      details: details,
+      type: WalletTypeTransaction.TRANSFER,
+      status: ETransactionStatus.PROCESSING,
+    };
+
+    await this.transactionService.createTransaction(newTransaction as Transaction);
+
+    await this.findAndUpdateWallet(walletId, { balance: newFromBalance });
+    await this.findAndUpdateWallet(toId, { balance: newToBalance });
   }
 
   async getBalance(walletId: string): Promise<number> {
     const wallet = await this.findWallet(walletId);
+    if (!wallet) throw new NotFoundException('wallet does not exist');
     return wallet.balance;
   }
 
   async findWallet(walletId: string): Promise<Wallet> {
     return await this.walletRepository.findOne({ where: { id: walletId } });
   }
+
+  async findWalletByUserId(userId: string): Promise<Wallet> {
+    return await this.walletRepository.findOne({ where: { userId: userId } });
+  }
+
   async findAndUpdateWallet(walletId: string, update: Record<any, any> = {}): Promise<Wallet> {
     const updated = await this.walletRepository.update({ id: walletId }, update);
     return updated.affected === 1 ? this.walletRepository.findOne({ where: { id: walletId } }) : null;

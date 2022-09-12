@@ -1,10 +1,4 @@
-import {
-  Column,
-  BaseEntity,
-  CreateDateColumn,
-  UpdateDateColumn,
-  PrimaryColumn,
-} from 'typeorm';
+import { Column, BaseEntity, CreateDateColumn, UpdateDateColumn, PrimaryColumn } from 'typeorm';
 
 abstract class BaseTable extends BaseEntity {
   @PrimaryColumn('uuid')

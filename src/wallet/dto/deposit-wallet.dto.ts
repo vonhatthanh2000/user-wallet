@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsUUID } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ECurrency } from 'src/protobuf/interface-ts/enums';
 
 export class DepositWalletDto {
@@ -14,4 +14,8 @@ export class DepositWalletDto {
 
   @IsNumber()
   amount: number;
+
+  @IsString()
+  @IsOptional()
+  details: string;
 }

@@ -1,37 +1,45 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
-import { CreateWalletDto } from './dto/create-wallet.dto';
-import { DepositWalletDto } from './dto/deposit-wallet.dto';
-import { Wallet } from './wallet.entity';
+import { Observable } from 'rxjs';
+import { ECurrency } from 'src/protobuf/interface-ts/enums';
+import {
+  WalletInput,
+  User as UserProto,
+  Wallet as WalletProto,
+  DepositInput,
+  DepositResponse,
+  TransferInput,
+  TransferResponse,
+  WalletServiceControllerMethods,
+  WalletServiceController as WalletServiceControllerGrpc,
+  Balance,
+} from 'src/protobuf/interface-ts/wallet';
+
 import { WalletService } from './wallet.service';
 
-@Controller('wallet')
-export class WalletController {
+@Controller()
+@WalletServiceControllerMethods()
+export class WalletController implements WalletServiceControllerGrpc {
   constructor(private readonly walletService: WalletService) {}
 
-  @GrpcMethod('WalletService', 'FindOne')
-  findOne(id: string): Wallet {
-    // const items = [
-    //   { id: 1, name: 'John' },
-    //   { id: 2, name: 'Doe' },
-    // ];
-    // return items.find(({ id }) => id === data.id);
-    return;
+  async createWallet(request: WalletInput): Promise<WalletProto> {
+    const wallet = await this.walletService.createWallet(request.userId, request.currency as ECurrency);
+    return WalletProto.fromJSON(wallet);
   }
 
-  @Post('create-wallet')
-  async createWallet(@Body() dto: CreateWalletDto) {
-    const newWallet = await this.walletService.createWallet(dto.userId, dto.currency);
-    return newWallet;
+  async getBalance(request: UserProto): Promise<Balance> {
+    const wallet = await this.walletService.findWalletByUserId(request.id);
+    // console.log('wallet :>> ', wallet);
+    const balance = await this.walletService.getBalance(wallet.id);
+    return Balance.fromJSON(balance);
   }
 
-  @Get('balance')
-  async getBalance(@Body() dto: CreateWalletDto) {
-    const wallet = await this.walletService.findWallet(dto.userId);
+  async depositWallet(request: DepositInput): Promise<DepositResponse> {
+    console.log('2 :>> ', 2);
+    return DepositResponse.fromJSON(0);
   }
 
-  @Post('deposit')
-  async deposit(@Body() dto: DepositWalletDto) {
-    const deposit = await this.walletService.depositWallet(dto.userId, dto.amount);
+  async transferFund(request: TransferInput): Promise<TransferResponse> {
+    console.log('3 :>> ', 3);
+    return TransferResponse.fromJSON(0);
   }
 }

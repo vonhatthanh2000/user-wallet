@@ -6,7 +6,6 @@ import { TransactionModule } from './transaction/transaction.module';
 
 @Module({
   imports: [
-    WalletModule,
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -18,6 +17,7 @@ import { TransactionModule } from './transaction/transaction.module';
       autoLoadEntities: true,
       synchronize: true,
     }),
+    WalletModule,
     TransactionModule,
   ],
   controllers: [],

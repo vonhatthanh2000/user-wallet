@@ -15,6 +15,8 @@ export class WalletService {
   ) {}
 
   async createWallet(userId: string, currency: ECurrency): Promise<Wallet> {
+    const userWallet = await this.findWalletByUserId(userId);
+    if (userWallet) throw new BadRequestException('User already has wallet');
     const wallet = await this.walletRepository.save({
       id: uuidv4(),
       userId: userId,

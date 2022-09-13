@@ -14,7 +14,7 @@ export class TransactionService {
     return await this.transactionRepository.findOne({ where: { id: transactionId } });
   }
 
-  async findAndUpdateTransaction(transactionId: string, update: Record<any, any> = {}): Promise<Transaction> {
+  async updateTransactionById(transactionId: string, update: Record<any, any> = {}): Promise<Transaction> {
     const updated = await this.transactionRepository.update({ id: transactionId }, update);
     return updated.affected === 1 ? this.transactionRepository.findOne({ where: { id: transactionId } }) : null;
   }

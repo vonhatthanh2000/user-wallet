@@ -1,7 +1,7 @@
 import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { v4 as uuidv4 } from 'uuid';
-import { ECurrency, EQueueEvent, ETransactionStatus, WalletTypeTransaction } from 'src/protobuf/interface-ts/enums';
+import { ECurrency, ETransactionStatus, WalletTypeTransaction } from 'src/protobuf/interface-ts/enums';
 import { Repository } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { TransactionService } from 'src/transaction/transaction.service';
@@ -14,11 +14,10 @@ export class WalletService {
   constructor(
     @InjectRepository(Wallet) private readonly walletRepository: Repository<Wallet>,
     @InjectQueue('wallet') private walletQueue: Queue,
-    private readonly transactionService: TransactionService, //
+    private readonly transactionService: TransactionService,
   ) {}
 
   async createWallet(userId: string, currency: ECurrency): Promise<Wallet> {
-    //TODO: add to queue
     const userWallet = await this.findWalletByUserId(userId);
     if (userWallet) throw new BadRequestException('User already has wallet');
 
@@ -31,7 +30,7 @@ export class WalletService {
     return wallet;
   }
 
-  async depositWallet(walletId: string, amount: number, currency: ECurrency, details: string = null): Promise<Wallet> {
+  async depositWallet(walletId: string, amount: number, currency: ECurrency, details: string = null) {
     const newTransaction = {
       id: uuidv4(),
       origin: null,
@@ -42,9 +41,11 @@ export class WalletService {
       type: WalletTypeTransaction.DEPOSIT,
       status: ETransactionStatus.INQUEUE,
     };
+    await this.transactionService.createTransaction(newTransaction as Transaction);
+    // Add to queue
     this.walletQueue.add(
       WalletTypeTransaction.DEPOSIT,
-      { data: { walletId, amount, currency, details } },
+      { transactionId: newTransaction.id, walletId, amount, currency, details },
       {
         removeOnComplete: true,
         attempts: 3,
@@ -54,12 +55,6 @@ export class WalletService {
         },
       },
     );
-
-    await this.transactionService.createTransaction(newTransaction as Transaction);
-    const currentBalance = await this.getBalance(walletId);
-    const newBalance = currentBalance + amount;
-
-    return await this.findAndUpdateWallet(walletId, { balance: newBalance });
   }
 
   async transferWalletFund(walletId: string, toId: string, amount: number, currency: ECurrency, details: string) {
@@ -67,14 +62,6 @@ export class WalletService {
     if (!fromWallet) throw new NotFoundException('wallet does not exist');
     const toWallet = await this.findWallet(toId);
     if (!toWallet) throw new NotFoundException('wallet does not exist');
-
-    const fromBalance = await this.getBalance(walletId);
-    if (amount > fromBalance) throw new BadRequestException('balance of wallet is inadequate to transfer');
-
-    const toBalance = await this.getBalance(toId);
-
-    const newFromBalance = fromBalance - amount;
-    const newToBalance = toBalance + amount;
 
     const newTransaction = {
       id: uuidv4(),
@@ -84,13 +71,22 @@ export class WalletService {
       amount: amount,
       details: details,
       type: WalletTypeTransaction.TRANSFER,
-      status: ETransactionStatus.PROCESSING,
+      status: ETransactionStatus.INQUEUE,
     };
-
     await this.transactionService.createTransaction(newTransaction as Transaction);
 
-    await this.findAndUpdateWallet(walletId, { balance: newFromBalance });
-    await this.findAndUpdateWallet(toId, { balance: newToBalance });
+    this.walletQueue.add(
+      WalletTypeTransaction.TRANSFER,
+      { transactionId: newTransaction.id, walletId, toId, amount, currency, details },
+      {
+        removeOnComplete: true,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      },
+    );
   }
 
   async getBalance(walletId: string): Promise<number> {

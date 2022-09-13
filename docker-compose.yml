@@ -1,13 +1,13 @@
 version: '3'
 services:
-  # redis:
-  #   image: redis:alpine
-  #   ports:
-  #     - '6380:6379'
-  #   volumes:
-  #     - .data/redis:/data
-  #   environment:
-  #     REDIS_PASSWORD: redis
+  redis:
+    image: redis:alpine
+    ports:
+      - '6381:6379'
+    volumes:
+      - .data/redis:/data
+    environment:
+      REDIS_PASSWORD: redis
   user-wallet:
     image: postgres:14.1-alpine
     environment:

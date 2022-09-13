@@ -11,7 +11,7 @@ import { BullModule } from '@nestjs/bull';
     BullModule.forRoot({
       redis: {
         host: 'localhost',
-        port: 6380,
+        port: 6381,
       },
     }),
     TypeOrmModule.forRoot({

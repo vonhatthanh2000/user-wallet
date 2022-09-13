@@ -1,22 +1,27 @@
 import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { v4 as uuidv4 } from 'uuid';
-import { ECurrency, ETransactionStatus, WalletTypeTransaction } from 'src/protobuf/interface-ts/enums';
+import { ECurrency, EQueueEvent, ETransactionStatus, WalletTypeTransaction } from 'src/protobuf/interface-ts/enums';
 import { Repository } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { Transaction } from 'src/transaction/transaction.entity';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 
 @Injectable()
 export class WalletService {
   constructor(
     @InjectRepository(Wallet) private readonly walletRepository: Repository<Wallet>,
+    @InjectQueue('wallet') private walletQueue: Queue,
     private readonly transactionService: TransactionService, //
   ) {}
 
   async createWallet(userId: string, currency: ECurrency): Promise<Wallet> {
+    //TODO: add to queue
     const userWallet = await this.findWalletByUserId(userId);
     if (userWallet) throw new BadRequestException('User already has wallet');
+
     const wallet = await this.walletRepository.save({
       id: uuidv4(),
       userId: userId,
@@ -35,8 +40,20 @@ export class WalletService {
       amount: amount,
       details: details,
       type: WalletTypeTransaction.DEPOSIT,
-      status: ETransactionStatus.PROCESSING,
+      status: ETransactionStatus.INQUEUE,
     };
+    this.walletQueue.add(
+      WalletTypeTransaction.DEPOSIT,
+      { data: { walletId, amount, currency, details } },
+      {
+        removeOnComplete: true,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      },
+    );
 
     await this.transactionService.createTransaction(newTransaction as Transaction);
     const currentBalance = await this.getBalance(walletId);

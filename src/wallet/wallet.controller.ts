@@ -29,19 +29,18 @@ export class WalletController implements WalletServiceControllerGrpc {
     const userWallet = await this.walletService.findWalletByUserId(request.id);
     // console.log('wallet :>> ', wallet);
     const balance = await this.walletService.getBalance(userWallet.id);
-    return Balance.fromJSON(balance);
+    const res = { balance };
+    return Balance.fromJSON(res);
   }
 
   async depositWallet(request: DepositInput): Promise<DepositResponse> {
     const userWallet = await this.walletService.findWalletByUserId(request.userId);
-    // TOOD: deposit by userId or WalletId
     const deposit = await this.walletService.depositWallet(
       userWallet.id,
       request.amount,
       request.currency as ECurrency,
-      request.detail,
+      request.details,
     );
-    //TODO: add status, error,...
     return DepositResponse.fromJSON(0);
   }
 

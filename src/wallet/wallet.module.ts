@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bull';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionModule } from 'src/transaction/transaction.module';
@@ -7,7 +8,13 @@ import { Wallet } from './wallet.entity';
 import { WalletService } from './wallet.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Wallet]), TransactionModule],
+  imports: [
+    TypeOrmModule.forFeature([Wallet]),
+    BullModule.registerQueue({
+      name: 'wallet',
+    }),
+    TransactionModule,
+  ],
   controllers: [WalletController],
   providers: [WalletService],
   exports: [WalletService],

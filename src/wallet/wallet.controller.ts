@@ -1,8 +1,9 @@
-import { Controller } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Controller, NotFoundException } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { ECurrency } from 'src/protobuf/interface-ts/enums';
 import {
   WalletInput,
-  User as UserProto,
+  BalanceInput,
   Wallet as WalletProto,
   DepositInput,
   DepositResponse,
@@ -25,29 +26,48 @@ export class WalletController implements WalletServiceControllerGrpc {
     return WalletProto.fromJSON(wallet);
   }
 
-  async getBalance(request: UserProto): Promise<Balance> {
-    const userWallet = await this.walletService.findWalletByUserId(request.id);
-    // console.log('wallet :>> ', wallet);
-    const balance = await this.walletService.getBalance(userWallet.id);
+  async getBalance(request: BalanceInput): Promise<Balance> {
+    const wallet = await this.walletService.findWallet(request.walletAddress);
+
+    //check if user is owner of this walletAddress or not
+    const currency = wallet.currency;
+    const walletAddress = await this.walletService.getWalletAddress(request.userId, currency);
+    if (walletAddress != request.walletAddress) throw new RpcException('User is not the owner of this wallet');
+
+    const balance = await this.walletService.getBalance(walletAddress);
     const res = { balance };
     return Balance.fromJSON(res);
   }
 
   async depositWallet(request: DepositInput): Promise<DepositResponse> {
-    const userWallet = await this.walletService.findWalletByUserId(request.userId);
+    //check whether user is owner of this walletAddress or not
+    const userWalletAddress = await this.walletService.getWalletAddress(request.userId, request.currency as ECurrency);
+    if (userWalletAddress != request.walletAddress) throw new RpcException('User is not the owner of this wallet');
+    const userWallet = await this.walletService.findWallet(request.userId);
     const deposit = await this.walletService.depositWallet(
-      userWallet.id,
+      request.walletAddress,
       request.amount,
       request.currency as ECurrency,
       request.details,
     );
+
     return DepositResponse.fromJSON(0);
   }
 
   async transferFund(request: TransferInput): Promise<TransferResponse> {
+    //check if wallet is exist or not
+    const fromWallet = await this.walletService.findWallet(request.fromAddress);
+    if (!fromWallet) throw new NotFoundException('Wallet does not exist');
+
+    //check whether user is owner of this walletAddress or not
+    const userWalletAddress = await this.walletService.getWalletAddress(request.userId, request.currency as ECurrency);
+    if (userWalletAddress != request.fromAddress) throw new RpcException('User is not the owner of this wallet');
+
+    const toWallet = await this.walletService.findWallet(request.toAddress);
+    if (!toWallet) throw new NotFoundException('wallet does not exist');
     const transfer = await this.walletService.transferWalletFund(
-      request.fromId,
-      request.toId,
+      request.fromAddress,
+      request.toAddress,
       request.amount,
       request.currency as ECurrency,
       request.details,

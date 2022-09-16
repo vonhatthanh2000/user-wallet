@@ -8,7 +8,11 @@ import { TransactionService } from 'src/transaction/transaction.service';
 import { Transaction } from 'src/transaction/transaction.entity';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import * as crypto from 'crypto';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
+const { SECRET_CIPHER } = process.env;
 @Injectable()
 export class WalletService {
   constructor(
@@ -18,23 +22,23 @@ export class WalletService {
   ) {}
 
   async createWallet(userId: string, currency: ECurrency): Promise<Wallet> {
-    const userWallet = await this.findWalletByUserId(userId);
-    if (userWallet) throw new BadRequestException('User already has wallet');
+    // create wallet address
+    const walletAddress = await this.getWalletAddress(userId, currency);
 
     const wallet = await this.walletRepository.save({
       id: uuidv4(),
-      userId: userId,
+      walletAddress: walletAddress,
       balance: 0,
       currency: currency,
     });
     return wallet;
   }
 
-  async depositWallet(walletId: string, amount: number, currency: ECurrency, details: string = null) {
+  async depositWallet(walletAddress: string, amount: number, currency: ECurrency, details: string = null) {
     const newTransaction = {
       id: uuidv4(),
       origin: null,
-      destination: walletId,
+      destination: walletAddress,
       currency: currency,
       amount: amount,
       details: details,
@@ -45,7 +49,7 @@ export class WalletService {
     // Add to queue
     this.walletQueue.add(
       WalletTypeTransaction.DEPOSIT,
-      { transactionId: newTransaction.id, walletId, amount, currency, details },
+      { transactionId: newTransaction.id, walletAddress, amount, currency, details },
       {
         removeOnComplete: true,
         attempts: 3,
@@ -57,27 +61,29 @@ export class WalletService {
     );
   }
 
-  async transferWalletFund(walletId: string, toId: string, amount: number, currency: ECurrency, details: string) {
-    const fromWallet = await this.findWallet(walletId);
-    if (!fromWallet) throw new NotFoundException('wallet does not exist');
-    const toWallet = await this.findWallet(toId);
-    if (!toWallet) throw new NotFoundException('wallet does not exist');
-
+  async transferWalletFund(
+    fromAddress: string,
+    toAddress: string,
+    amount: number,
+    currency: ECurrency,
+    details: string,
+  ) {
     const newTransaction = {
       id: uuidv4(),
-      origin: fromWallet.id,
-      destination: toWallet.id,
+      origin: fromAddress,
+      destination: toAddress,
       currency: currency,
       amount: amount,
       details: details,
       type: WalletTypeTransaction.TRANSFER,
       status: ETransactionStatus.INQUEUE,
     };
+
     await this.transactionService.createTransaction(newTransaction as Transaction);
 
-    this.walletQueue.add(
+    await this.walletQueue.add(
       WalletTypeTransaction.TRANSFER,
-      { transactionId: newTransaction.id, walletId, toId, amount, currency, details },
+      { transactionId: newTransaction.id, fromAddress, toAddress, amount, currency, details },
       {
         removeOnComplete: true,
         attempts: 3,
@@ -89,22 +95,28 @@ export class WalletService {
     );
   }
 
-  async getBalance(walletId: string): Promise<number> {
-    const wallet = await this.findWallet(walletId);
+  async getBalance(walletAddress: string): Promise<number> {
+    const wallet = await this.findWallet(walletAddress);
     if (!wallet) throw new NotFoundException('wallet does not exist');
     return wallet.balance;
   }
 
-  async findWallet(walletId: string): Promise<Wallet> {
-    return await this.walletRepository.findOne({ where: { id: walletId } });
+  async findWallet(walletAddress: string): Promise<Wallet> {
+    return await this.walletRepository.findOne({ where: { walletAddress } });
   }
 
-  async findWalletByUserId(userId: string): Promise<Wallet> {
-    return await this.walletRepository.findOne({ where: { userId: userId } });
+  // async findWalletByUserId(userId: string): Promise<Wallet> {
+  //   return await this.walletRepository.findOne({ where: { userId: userId } });
+  // }
+
+  async findAndUpdateWallet(walletAddress: string, update: Record<any, any> = {}): Promise<Wallet> {
+    const updated = await this.walletRepository.update({ walletAddress }, update);
+    return updated.affected === 1 ? this.walletRepository.findOne({ where: { walletAddress } }) : null;
   }
 
-  async findAndUpdateWallet(walletId: string, update: Record<any, any> = {}): Promise<Wallet> {
-    const updated = await this.walletRepository.update({ id: walletId }, update);
-    return updated.affected === 1 ? this.walletRepository.findOne({ where: { id: walletId } }) : null;
+  async getWalletAddress(userId: string, currency: ECurrency): Promise<string> {
+    const inputStr = userId + <string>currency + SECRET_CIPHER;
+    const hashPwd = crypto.createHash('sha256').update(inputStr).digest('hex');
+    return hashPwd;
   }
 }

@@ -1,11 +1,11 @@
 import BaseTable from 'src/common/typeorm/base-table';
-import { Column, Entity } from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { Min } from 'class-validator';
 import { ECurrency } from 'src/protobuf/interface-ts/enums';
 @Entity()
 export class Wallet extends BaseTable {
-  @Column('uuid')
-  userId: string;
+  @Column('varchar', { unique: true })
+  walletAddress: string;
 
   @Min(0)
   @Column('integer', { default: 0 })

@@ -5,10 +5,10 @@ import { ECurrency, ETransactionStatus, WalletTypeTransaction } from 'src/protob
 
 @Entity()
 export class Transaction extends BaseTable {
-  @Column('uuid', { nullable: true })
+  @Column('varchar', { nullable: true })
   origin!: string;
 
-  @Column('uuid')
+  @Column('varchar')
   destination!: string;
 
   @Column('varchar')
